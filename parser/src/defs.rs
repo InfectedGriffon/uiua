@@ -1271,6 +1271,8 @@ primitive!(
     /// ex: ▽◰⊸⌵ [1 ¯2 ¯5 2 3 1 5]
     (1, Unique, MonadicArray, ("unique", '◰')),
     /// Turn an array into a box
+    /// 
+    /// un: Get an array out of a box
     ///
     /// This is Uiua's primary way to create nested or mixed-type arrays.
     /// Normally, arrays can only be created if their rows have the same shape and type.

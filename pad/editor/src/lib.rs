@@ -1235,6 +1235,14 @@ pub fn Editor<'a>(
                         })}
                     <br />
                     {doc.short_text().into_owned()}
+                    {doc.inverse_text().map(|inv| view! {
+                        <br />
+                        <Prim prim=Primitive::Un glyph_only=true />
+                        <Prim prim=prim glyph_only=true />
+                        "un" {move || prim.name()}
+                        <br />
+                        {inv.into_owned()}
+                    })}
                 }
                 .into_view(),
             );

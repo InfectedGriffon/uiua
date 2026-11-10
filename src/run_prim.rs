@@ -2202,6 +2202,8 @@ fn format_trace_item_lines(mut lines: Vec<String>, mut max_line_len: usize) -> V
 pub struct PrimDoc {
     /// The short description
     pub short: Vec<PrimDocFragment>,
+    /// The inverse description
+    pub inverse: Option<Vec<PrimDocFragment>>,
     /// The full documentation
     pub lines: Vec<PrimDocLine>,
 }
@@ -2215,42 +2217,15 @@ impl From<Primitive> for PrimDoc {
 impl PrimDoc {
     /// Get the primitive's short description
     pub fn short_text(&self) -> Cow<str> {
-        if self.short.len() == 1 {
-            match &self.short[0] {
-                PrimDocFragment::Text(t) => return Cow::Borrowed(t),
-                PrimDocFragment::Code(c) => return Cow::Borrowed(c),
-                PrimDocFragment::Emphasis(e) => return Cow::Borrowed(e),
-                PrimDocFragment::Strong(s) => return Cow::Borrowed(s),
-                PrimDocFragment::Primitive { prim, named: true } => {
-                    return Cow::Borrowed(prim.name());
-                }
-                PrimDocFragment::Link { text, .. } => return Cow::Borrowed(text),
-                PrimDocFragment::Primitive { .. } => {}
-            }
-        }
-        let mut s = String::new();
-        for frag in &self.short {
-            match frag {
-                PrimDocFragment::Text(t) => s.push_str(t),
-                PrimDocFragment::Code(c) => s.push_str(c),
-                PrimDocFragment::Emphasis(e) => s.push_str(e),
-                PrimDocFragment::Strong(str) => s.push_str(str),
-                PrimDocFragment::Link { text, .. } => s.push_str(text),
-                PrimDocFragment::Primitive { prim, named } => {
-                    if *named {
-                        s.push_str(prim.name());
-                    } else if let Some(c) = prim.glyph() {
-                        s.push(c);
-                    } else {
-                        s.push_str(prim.name());
-                    }
-                }
-            }
-        }
-        Cow::Owned(s)
+        prim_doc_line_fragments_to_text(&self.short)
+    }
+    /// Get the primitive's inverse description
+    pub fn inverse_text(&self) -> Option<Cow<str>> {
+        self.inverse.as_deref().map(prim_doc_line_fragments_to_text)
     }
     pub(crate) fn from_lines(s: &str) -> Self {
         let mut short = Vec::new();
+        let mut inverse = None;
         let mut lines = Vec::new();
         for mut line in s.lines() {
             line = line.trim();
@@ -2288,6 +2263,11 @@ impl PrimDoc {
                 } else {
                     lines.push(PrimDocLine::Text(parse_doc_line_fragments(line)));
                 }
+            } else if let Some(mut inv) = line.strip_prefix("un:") && inverse.is_none() {
+                if inv.starts_with(' ') {
+                    inv = &inv[1..]
+                }
+                inverse = Some(parse_doc_line_fragments(inv))
             } else if short.is_empty() {
                 // Set short
                 short = parse_doc_line_fragments(line);
@@ -2310,7 +2290,7 @@ impl PrimDoc {
                 break;
             }
         }
-        Self { short, lines }
+        Self { short, inverse, lines }
     }
 }
 
@@ -2375,6 +2355,42 @@ pub enum PrimDocFragment {
     Strong(String),
     Primitive { prim: Primitive, named: bool },
     Link { text: String, url: String },
+}
+
+pub(crate) fn prim_doc_line_fragments_to_text<'a>(frags: &'a [PrimDocFragment]) -> Cow<'a, str> {
+    if frags.len() == 1 {
+        match &frags[0] {
+            PrimDocFragment::Text(t) => return Cow::Borrowed(t),
+            PrimDocFragment::Code(c) => return Cow::Borrowed(c),
+            PrimDocFragment::Emphasis(e) => return Cow::Borrowed(e),
+            PrimDocFragment::Strong(s) => return Cow::Borrowed(s),
+            PrimDocFragment::Primitive { prim, named: true } => {
+                return Cow::Borrowed(prim.name());
+            }
+            PrimDocFragment::Link { text, .. } => return Cow::Borrowed(text),
+            PrimDocFragment::Primitive { .. } => {}
+        }
+    }
+    let mut s = String::new();
+    for frag in frags {
+        match frag {
+            PrimDocFragment::Text(t) => s.push_str(t),
+            PrimDocFragment::Code(c) => s.push_str(c),
+            PrimDocFragment::Emphasis(e) => s.push_str(e),
+            PrimDocFragment::Strong(str) => s.push_str(str),
+            PrimDocFragment::Link { text, .. } => s.push_str(text),
+            PrimDocFragment::Primitive { prim, named } => {
+                if *named {
+                    s.push_str(prim.name());
+                } else if let Some(c) = prim.glyph() {
+                    s.push(c);
+                } else {
+                    s.push_str(prim.name());
+                }
+            }
+        }
+    }
+    Cow::Owned(s)
 }
 
 pub(crate) fn parse_doc_line_fragments(mut line: &str) -> Vec<PrimDocFragment> {
